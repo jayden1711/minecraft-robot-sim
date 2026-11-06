@@ -1,0 +1,12 @@
+results
+logs
+runs
+.venv
+__pycache__/
+*.pyc
+build/
+.gradle/
+mod/run/
+mod/build/
+server-mc/
+weights
