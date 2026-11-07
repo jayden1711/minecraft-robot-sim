@@ -10,6 +10,8 @@ mod/run/
 mod/build/
 server-mc/
 weights
+mod/dist/
+server-mc-test/
 CLAUDE.md
 .claude/
 HANDOFF.md

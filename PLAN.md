@@ -7,7 +7,7 @@ the physics is MuJoCo, never Minecraft's. Nothing here is a claim about real rob
 ```
  owner's Minecraft client (vanilla)                         NUC
         |  (Minecraft protocol, over the network)   +-------------------------------------+
-        +------------------------------------------>| headless Fabric server (JDK 21)     |
+        +------------------------------------------>| headless Fabric server (JDK 25)     |
                                                     |   mcrobot mod (server-side only)    |
                                                     +------------------+------------------+
                                                                        | TCP, loopback, framed (below)
@@ -29,26 +29,62 @@ the physics is MuJoCo, never Minecraft's. Nothing here is a claim about real rob
 | M3 | Export: the trained policy runs in plain MuJoCo without Minecraft; success rates with seeds | critique C2 and C5 tests pass on the exported artifact |
 | M4 | (later, with pocket-vla) rebuild the owner's room to scale, train the rover, run on the real rover | measured, with real-vs-sim gap stated |
 
-## Pinned versions (checked against meta.fabricmc.net / Maven on 2026-11-06)
+## Multi-version support (owner decision 2026-11-06)
 
-| Component | Pin | Why |
-|-----------|-----|-----|
-| Minecraft (Java Edition) | **1.21.11** | newest release before the 26.x versioning; Fabric API, Loom and Yarn all exist for it. 26.x exists but I have no offline knowledge of its API, so I did not pin it. Revisit after M1 |
-| Fabric Loader | 0.20.1 | latest stable for 1.21.11 |
-| Fabric API | 0.141.6+1.21.11 | latest for 1.21.11 |
-| Fabric Loom | 1.14.10 | needs Gradle >= 9.2 |
-| Mappings | Yarn 1.21.11+build.6 (CC0) | avoids Mojang-mappings licence questions [verify: Mojang mappings terms] |
-| Gradle | 9.8.2 (wrapper, in git) | |
-| JDK | Temurin 21.0.13+9 in `~/opt/jdk-21.0.13+9` | user space, no sudo |
-| Python | 3.12, `.venv/` | |
-| MuJoCo (pip) | 4.0.0 | installed; check exact API drift before pinning the trainer |
-| mjlab, mujoco_warp | pinned at the start of M1 | [verify] versions and licences |
+Primary target: the **latest Minecraft Java release, 26.3** (Mojang's `latest.release` in `version_manifest_v2.json` on 2026-11-06; released 2026-09-15).
+Also built and tested for **1.21.11** and **1.20.1**. One codebase with [Stonecutter](https://stonecutter.kikugie.dev) 0.9.8: `mod/src/` is shared,
+version differences are `//? if >=1.21.11 { ... //?} else { /* ... */ //?}` comment blocks (today only two: the command permission check and the
+dimension id accessor). `mod/stonecutter.gradle` marks 26.3 as the active version (the form of the code checked in); every `:<version>:build` generates its own
+processed sources, so building any version needs no switching.
+
+- **Mappings: Mojang's official names on every version.** 26.x ships unobfuscated with Mojang names and has no Yarn at all
+  (`meta.fabricmc.net/v2/versions/yarn/26.3` is empty), so using Mojang names on 1.20.1 and 1.21.11 too keeps the source identical. This replaces the Yarn pin of M0.
+  Mojang's mapping terms (header of the downloaded file): usable for development, not redistributable complete and unmodified. We never ship them; Loom fetches them at build time.
+- Loom 1.19.4 has two plugins from one jar: `net.fabricmc.fabric-loom` (no remap; 26.x) and `net.fabricmc.fabric-loom-remap` (1.20.1, 1.21.11).
+  `mod/build.gradle` picks by `stonecutter.eval(version, '<26')`.
+- **Gradle must run on JDK 25** (Loom 1.19.4's plugin variant requires Java 25 and Gradle API 9.8). Each version is compiled with `--release` of its own Java (17 / 21 / 25) and its tests run on that JDK
+  (`MCROBOT_JDK_<n>`, defaults to `~/opt/jdk-*`).
+- Test matrix: `scripts/test_matrix.sh` (`make test-matrix`): per version, the Python tests, the mod build, the Java tests, and the mod-to-Python-server integration test (`InteropTest`, which the script requires to have run, not skipped).
+  `--smoke` (`make test-matrix-smoke`) also boots a real Fabric server per version on a throwaway flat world with that version's mod jar, runs `robot ping` and `robot export` from the console against real blocks, and checks the ack; the 26.3 leg also runs with Via and checks protocol translation.
+  `.github/workflows/ci.yml` runs the non-smoke matrix (never pushed: there is no remote). Its `${{ env.JAVA_HOME_n_X64 }}` hand-off from setup-java is [verify].
+
+### Pinned versions (checked against Mojang, meta.fabricmc.net, maven.fabricmc.net, maven.kikugie.dev and the Modrinth API on 2026-11-06)
+
+| Component | 26.3 (primary) | 1.21.11 | 1.20.1 |
+|-----------|----------------|---------|--------|
+| Minecraft protocol number | 777 | 774 | 763 |
+| Fabric Loader | 0.20.1 | 0.20.1 | 0.20.1 |
+| Fabric API | 0.165.2+26.3 | 0.141.6+1.21.11 | 0.92.12+1.20.1 |
+| Mappings | none (unobfuscated, Mojang names) | Mojang official | Mojang official |
+| Java (build `--release` / server JDK) | 25 | 21 | 17 |
+| Loom plugin | `net.fabricmc.fabric-loom` | `net.fabricmc.fabric-loom-remap` | `net.fabricmc.fabric-loom-remap` |
+
+| Shared pin | Version |
+|------------|---------|
+| Fabric Loom | 1.19.4 |
+| Stonecutter | 0.9.8 |
+| Gradle | 9.8.2 (wrapper, in git; latest is 9.9.0, not needed) |
+| JDKs | Temurin 25.0.5+8, 21.0.13+9, 17.0.21+9 in `~/opt` (user space) |
+| Fabric installer (server launcher) | 1.1.2 |
+| Python | 3.12, `.venv/` |
+| MuJoCo (pip) | 4.0.0; check exact API drift before pinning the trainer |
+| mjlab, mujoco_warp | pinned at the start of M1 [verify versions and licences] |
+| Mod version | 0.0.2 (jars are named `mcrobot-<mod>+<mc>.jar`) |
+
+Server-side Via (NUC server only, 26.3): **ViaFabric 0.4.22+188-26.x** (the Fabric platform for ViaVersion; works on a dedicated server, `environment: *`) with **ViaVersion 5.12.2** (release, overrides the 5.12.1-SNAPSHOT that ViaFabric embeds)
+and **ViaBackwards 5.12.2** (release). ViaFabricPlus is client-side only and is not used. ViaRewind (1.8 and older clients) is not installed. ViaFabric is on Modrinth's alpha channel (the only channel for 26.x).
+URLs and SHA-256 are in `scripts/pins.tsv`; jars live only in git-ignored server dirs (`server-mc/mods/`, `server-mc-test/`).
+
+Client versions: ViaBackwards 5.12.2 contains the protocol chain from 1.9 up to 26.3 (`Protocol1_9_1To1_9` ... `Protocol26_3To26_2`), so older clients 1.9 through 26.2 are claimed by Via, plus native 26.3.
+Newer clients than 26.3 are not covered until Via adds them. `scripts/ping_status.py` and `scripts/smoke_server.sh --via` check, per protocol number, that the server answers a status request with the client's number (Via translating) and that a plain server does not (control).
+That is a protocol-level check, not a login: a real client has never joined from this repo.
 
 ## Server layout: headless Fabric server on the NUC
 
 `server-mc/` (git-ignored) holds the Fabric server launcher, Mojang's server jar (downloaded by the launcher on first run, never committed),
-`mods/` (Fabric API + the built `mcrobot` jar) and the world. `scripts/run_server.sh` starts it at nice 10 with 2 CPU threads and a 2 GB heap.
-Minecraft listens on 25566 (the default 25565 left free), `online-mode=true`. The owner's vanilla client connects to `<nuc>:25566`.
+`mods/` (Fabric API + the built `mcrobot` jar + the Via jars) and the world. `scripts/setup_server.sh 26.3 server-mc --via --eula-from <file>` creates it from the pins;
+`scripts/run_server.sh` starts it at nice 10 with 2 CPU threads and a 2 GB heap on the JDK the version needs.
+Minecraft listens on 25566 (the default 25565 left free), `online-mode=true`, whitelist on. The owner's vanilla client connects to `<nuc>:25566`.
 How the NUC is reachable (Tailscale, LAN, SSH tunnel) is the owner's call; nothing is exposed by this repo. The Python bridge port
 (25599) binds to loopback only and requires a shared token when `MCROBOT_TOKEN` is set.
 The server only runs when the owner starts it, and it needs the owner to accept Mojang's EULA (HANDOFF.md).

@@ -1,0 +1,15 @@
+plugins {
+    id 'dev.kikugie.stonecutter'
+}
+
+stonecutter.active '26.3'
+
+// All versions: ./gradlew buildAll / testAll (or scripts/test_matrix.sh from the repo root).
+tasks.register('buildAll') {
+    group = 'mcrobot'
+    dependsOn stonecutter.tasks.named('build').map { it.values() }
+}
+tasks.register('testAll') {
+    group = 'mcrobot'
+    dependsOn stonecutter.tasks.named('test').map { it.values() }
+}

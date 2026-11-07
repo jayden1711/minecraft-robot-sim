@@ -1,0 +1,9 @@
+# Pinned third-party jars that setup_server.sh downloads into git-ignored server dirs (never committed, never redistributed).
+# Verified 2026-11-06: the SHA-512 Modrinth publishes for each file matched the download; the SHA-256 below is what setup_server.sh checks.
+# key	sha256	filename	url
+fabric-api@1.20.1	4197ff4fbdac13cffccd267c1bc59e9fbabb2b5683a9d5f8023f4b5ea16a1c1e	fabric-api-0.92.12+1.20.1.jar	https://cdn.modrinth.com/data/P7dR8mSH/versions/rvI2dfzR/fabric-api-0.92.12%2B1.20.1.jar
+fabric-api@1.21.11	bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f	fabric-api-0.141.6+1.21.11.jar	https://cdn.modrinth.com/data/P7dR8mSH/versions/6qAuTtLR/fabric-api-0.141.6%2B1.21.11.jar
+fabric-api@26.3	2612a078a5daa06d9a14cabad40fe66de36b8cb22ee8cdf346d5d9894478c392	fabric-api-0.165.2+26.3.jar	https://cdn.modrinth.com/data/P7dR8mSH/versions/nJlcvFfj/fabric-api-0.165.2%2B26.3.jar
+via@26.3	8d3d691199988b931d725b792aa6e0d4e24efe1fb15869e6b52f24b91a0b88e5	ViaFabric-0.4.22+188-26.x.jar	https://cdn.modrinth.com/data/YlKdE5VK/versions/z1FVDMnq/ViaFabric-0.4.22%2B188-26.x.jar
+via@26.3	c0b63badcb0f7d38f4443e06820f2b8142dd4f0d3b0511f9330ff1050430e6b2	ViaVersion-5.12.2.jar	https://cdn.modrinth.com/data/P1OZGk5p/versions/cVhZ1kgN/ViaVersion-5.12.2.jar
+via@26.3	e989440e0aad7e12d4685d7a57df854691b67660966a95ec0450e20ce98e87ab	ViaBackwards-5.12.2.jar	https://cdn.modrinth.com/data/NpvuJQoq/versions/1xHfYAKG/ViaBackwards-5.12.2.jar

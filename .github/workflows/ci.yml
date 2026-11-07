@@ -1,0 +1,37 @@
+name: ci
+
+# Not pushed anywhere yet (there is no remote). Runs the same matrix as `make test-matrix`: one leg per supported Minecraft version.
+# The real-server smoke test (scripts/smoke_server.sh) is not run here: it needs the owner's accepted Mojang EULA.
+on:
+  push:
+  pull_request:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        mc: ["1.20.1", "1.21.11", "26.3"]   # keep in sync with mod/settings.gradle and scripts/versions.sh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+            25
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python deps
+        run: python -m pip install numpy mujoco pytest pillow
+      - name: Test matrix leg
+        env:
+          MCROBOT_JDK_17: ${{ env.JAVA_HOME_17_X64 }}
+          MCROBOT_JDK_21: ${{ env.JAVA_HOME_21_X64 }}
+          MCROBOT_JDK_25: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          export MCROBOT_PY="$(which python)"
+          scripts/test_matrix.sh ${{ matrix.mc }}

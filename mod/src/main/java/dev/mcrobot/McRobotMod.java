@@ -9,13 +9,13 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class McRobotMod implements ModInitializer {
-    public static final String VERSION = "0.0.1";
+    public static final String VERSION = "0.0.2";
     public static final Logger LOG = LoggerFactory.getLogger("mcrobot");
 
     private static Bridge bridge;
@@ -30,7 +30,7 @@ public final class McRobotMod implements ModInitializer {
         bridge = new Bridge(loadConfig());
         bridge.setChat(msg -> {
             MinecraftServer s = server;
-            if (s != null) s.execute(() -> s.getPlayerManager().broadcast(Text.literal("[robot] " + msg), false));
+            if (s != null) s.execute(() -> s.getPlayerList().broadcastSystemMessage(Component.literal("[robot] " + msg), false));
             LOG.info(msg);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(s -> server = s);

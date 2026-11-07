@@ -33,7 +33,7 @@ def main() -> None:
     base = ROOT / "datapack" / "mcrobot_demo"
     (base / "data" / "mcrobot_demo" / "function").mkdir(parents=True, exist_ok=True)
     (base / "pack.mcmeta").write_text(
-        json.dumps({"pack": {"description": "minecraft-robot-sim M0 demo maze", "min_format": 94, "max_format": 94}}, indent=2) + "\n"
+        json.dumps({"pack": {"description": "minecraft-robot-sim M0 demo maze", "min_format": 94, "max_format": 121}}, indent=2) + "\n"
     )
     (base / "data" / "mcrobot_demo" / "function" / "maze.mcfunction").write_text("\n".join(lines) + "\n")
     print(f"{len(lines) - 2} fill commands")

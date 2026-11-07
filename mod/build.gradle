@@ -1,40 +1,66 @@
 plugins {
-    id 'fabric-loom' version "${loom_version}"
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
 }
 
-version = project.mod_version
+def mc = stonecutter.current.version
+// Minecraft 26.x ships unobfuscated (Mojang names, no mappings): the no-remap Loom plugin. Older versions are obfuscated:
+// the remap plugin with Mojang's official mappings, so the source uses the same names on every version.
+def obfuscated = stonecutter.eval(mc, '<26')
+apply plugin: obfuscated ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+version = "${project.mod_version}+${mc}"
 group = project.maven_group
+base.archivesName = 'mcrobot'
 
 repositories {
     mavenCentral()
 }
 
+def javaV = project.java_version as int
+def depConf = obfuscated ? 'modImplementation' : 'implementation'
+
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    minecraft "com.mojang:minecraft:${mc}"
+    if (obfuscated) mappings loom.officialMojangMappings()
+    add(depConf, "net.fabricmc:fabric-loader:${project.loader_version}")
+    add(depConf, "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
 
 processResources {
-    inputs.property 'version', project.version
+    def props = [version: project.version, minecraft_dep: project.minecraft_dep, java_dep: project.java_version]
+    inputs.properties props
     filesMatching('fabric.mod.json') {
-        expand 'version': project.version
+        expand props
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = javaV
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.toVersion(javaV)
+    targetCompatibility = JavaVersion.toVersion(javaV)
 }
 
+// Run each version's tests on the JDK that version needs, when the environment provides it
+// (MCROBOT_JDK_17 / _21 / _25, or GitHub Actions' JAVA_HOME_<n>_X64); otherwise on the JDK running Gradle.
+def jdkHome = System.getenv("MCROBOT_JDK_${javaV}") ?: System.getenv("JAVA_HOME_${javaV}_X64")
 test {
     useJUnitPlatform()
+    outputs.upToDateWhen { false } // env (MCROBOT_PY) is not a Gradle input; always re-run
+    if (jdkHome) executable = "${jdkHome}/bin/java"
+    testLogging { events 'passed', 'failed', 'skipped' }
 }
+
+// Stable path for scripts: mod/dist/mcrobot-<modversion>+<mc>.jar (the remapped jar on obfuscated versions).
+tasks.register('collectJar', Copy) {
+    dependsOn(obfuscated ? tasks.named('remapJar') : tasks.named('jar'))
+    from(obfuscated ? tasks.named('remapJar') : tasks.named('jar'))
+    into rootProject.layout.projectDirectory.dir('dist')
+}
+tasks.named('build') { finalizedBy 'collectJar' }
