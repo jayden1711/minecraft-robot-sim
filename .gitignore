@@ -10,3 +10,7 @@ mod/run/
 mod/build/
 server-mc/
 weights
+CLAUDE.md
+.claude/
+HANDOFF.md
+ORGANIZER.md
