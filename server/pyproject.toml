@@ -1,0 +1,16 @@
+[project]
+name = "mcrobot"
+version = "0.0.1"
+description = "Python side of minecraft-robot-sim: socket server, block-region to MJCF exporter"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = ["numpy>=2.0", "mujoco>=3.2"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pillow"]
+
+[tool.setuptools]
+packages = ["mcrobot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
