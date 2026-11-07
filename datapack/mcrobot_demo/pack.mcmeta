@@ -1,7 +1,16 @@
 {
   "pack": {
-    "description": "minecraft-robot-sim M0 demo maze",
+    "description": "minecraft-robot-sim demo maze and sky arenas",
     "min_format": 94,
     "max_format": 121
+  },
+  "overlays": {
+    "entries": [
+      {
+        "min_format": 121,
+        "max_format": 121,
+        "directory": "overlay_26_3"
+      }
+    ]
   }
 }

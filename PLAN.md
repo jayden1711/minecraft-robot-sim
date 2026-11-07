@@ -26,6 +26,7 @@ the physics is MuJoCo, never Minecraft's. Nothing here is a claim about real rob
 | M0 | Mod + server handshake; export a small build to MuJoCo and show it matches | handshake on the real Fabric server; MuJoCo render and in-game screenshot of the same build in `results/m0/`; Python + Java tests green |
 | M1 | Rover (diff-drive) learns "reach the gold block" in a player-built maze; ghosts visible in game; `/robot play` works | success-rate curve with seeds; ghosts logged and replayed (critique C5) |
 | M2 | Go2, then G1: locomotion to a goal over player-built terrain, starting from an existing open locomotion policy | license of the base policy checked and recorded in THIRD_PARTY.md first |
+| M2 (next, after M1 trains) | **Real stairs**: fine-tune the frozen G1 walking policy to climb real 0.25 m slab steps at the 0.5 m/block scale (today's limit is a 5 cm step), then replace the STAIRS ramp of arena v2 by real slab steps and relabel it | the policy climbs the slab staircase in MuJoCo with seeds; `arena_v2.STAIRS_*` and the label "(ramp until M2)" updated; the G1 policy licence recorded in THIRD_PARTY.md first (that row still says unknown) |
 | M3 | Export: the trained policy runs in plain MuJoCo without Minecraft; success rates with seeds | critique C2 and C5 tests pass on the exported artifact |
 | M4 | (later, with pocket-vla) rebuild the owner's room to scale, train the rover, run on the real rover | measured, with real-vs-sim gap stated |
 
@@ -136,6 +137,10 @@ Limits: 4M cells per export (mod side); the Python side accepts up to the 64 MiB
    Training MJCF can drop visuals (`to_mjcf(visuals=False)`).
 5. Test: boxes are disjoint and cover exactly the solid cells on random grids; a flat floor is 1 box; the maze needs far fewer boxes than cells.
 
+6. Materials (arena v2): colliders are labelled by friction class (`Region.friction_classes`): packed ice, ice, blue ice and frosted ice are separate boxes with a low sliding friction
+   (`region.BLOCK_FRICTION`), written on the geom together with `priority="2" condim="6"`. The priority matters: MuJoCo takes a contact's friction from the geom with the higher priority, and the G1's
+   own collision geoms have priority 1, so a floor geom at the default priority would be ignored. A region without slippery blocks exports exactly as before. Tests: `test_friction.py`.
+
 Known limit: boxes are axis-aligned and exact; there is no mesh for diagonal terrain because Minecraft has none. Contact quality at box seams is a
 real MuJoCo concern (a foot can catch an internal edge between adjacent boxes); merging reduces seams and the merged-vs-unmerged comparison is a test in M1.
 
@@ -144,11 +149,13 @@ real MuJoCo concern (a foot can catch an internal edge between adjacent boxes); 
 Minecraft: x east, y up, z south (right-handed with east x up = south). MuJoCo: x east, y north, z up. Mapping, relative to the region's minimum corner:
 `mj = (x, -z, y) * meters_per_block`. It is a proper rotation (no mirror), tested. Region origin is stored so poses map back exactly (`mj_to_mc`).
 
-**1 block = 1 m by default.** Argument: the rover is ~0.3 m wide so 1 m corridors are comfortable; "rebuild the owner's room to scale" (M4) is
-simplest at 1 block = 1 m with sub-block detail from slabs (0.5 m) and furniture as exact collision boxes; and the player's intuition (a block is a metre) is a feature.
-Where it breaks: a Go2 (~0.3 m tall at the hip) cannot climb a 1 m step and a G1 does not fit a 1 m cube tunnel in a believable way. So each region carries
-`meters_per_block` (already in the protocol and exporter, tested). M2 locomotion worlds use ~0.2 m/block ([verify] against what the base policy can climb), where a one-block step is a 0.2 m step. Ghosts are then drawn
-scaled by `1/meters_per_block` so the robot looks right against the blocks. Rewards, thresholds, and policies are always in MuJoCo meters.
+**World scale is one setting, `meters_per_block`, default 0.5** (owner decision 2026-11-06; it was 1.0 in M0). Set in the mod's `config/mcrobot.properties` (`meters_per_block`) or the environment variable
+`MCROBOT_METERS_PER_BLOCK`; validated to [0.01, 100]; written into every export header (`Region.meters_per_block`); headers without the key mean 1.0. Argument for 0.5: the Unitree G1 (1.32 m) is then 2.6 blocks tall
+and its 0.53 m body about one block wide, which reads right next to the world; the M0 rover is ~0.3 m wide, so its corridors can stay 1 block (0.5 m). The cost: a block is half as big against the robot's
+limits (a G1 corridor needs 2 blocks, ceilings 3, a carpet is a climbable 3 cm step, a full block never is). The setting is global to the server: exports made at another scale stay valid because each carries its own.
+Everything reads the header value: the collider merge and the marker boxes (`mjcf.py`), the navigation grid (`nav.Layout.cell`), the ghost transforms (`g1.Rig`: block ghosts scale the box by `1/meters_per_block`, item-model ghosts the
+model by `model_scale_m / meters_per_block`), the demo. Tests: `test_scale.py`, the Rig test at 1.0, 0.5 and 0.2. M2 locomotion worlds may use ~0.2 m/block ([verify] against what the base policy can climb).
+Rewards, thresholds, and policies are always in MuJoCo meters.
 
 ## Reward spec from blocks
 
@@ -177,6 +184,14 @@ Goal: the player watches the policy improve. Ghosts are not an animation: every 
 - Budget: 50 ghosts x 5 Hz x ~60 B of entity data is ~15 KB/s per connected client, plus the bridge frame of ~0.4 KB per sample.
 - Every sample sent is appended to `results/<run>/ghost_log.npz` (step, env_id, pose), the artifact the C5 test replays.
 - Each ghost is 1 to 3 block displays (rover: a flat box and two wheels; legged robots: a body box plus coarse leg boxes from the same state's link poses in M2), tinted by episode status (running/success/failed) from the same log.
+- Visual style (M1, owner decision 2026-11-06): the demo G1 can also be drawn as one `item_display` per link with a model from a server resource pack (generated from the Menagerie G1 meshes as cuboid
+  elements, plain colours, no logos; `scripts/build_pack.py`). The payload part carries `"m": "mcrobot:g1/<link>"` instead of `"b": <block>`; the mod summons an `item_display` whose stack is a stick with the
+  `minecraft:item_model` component (>= 1.21.11; 1.20.1 has no such component and draws a stick). The pack is offered through `server.properties` (`resource-pack` URL on the NUC, SHA-1, fixed id,
+  `require-resource-pack=false`); an item display is centred on its entity, a block display is not, which `g1.Rig` accounts for. `/robot style blocks|models` switches; block ghosts remain the fallback and the swarm style.
+  Display culling: a display entity is culled by its own position, so the payload carries `cull` (blocks) and the mod sets `width`/`height`/`view_range` on the entities (a robot walking 40 blocks from its anchor stays visible).
+- Pack formats (read from `version.json` in the server jars): resource format 75.0 on 1.21.11, 97.1 on 26.3; the pack declares `min_format` 75, `max_format` 99, which one pack serves on both (item model
+  definitions under `assets/<ns>/items/` exist on both). ViaBackwards passes the resource-pack push through (the client downloads from the URL) and should map the `item_model` component 1:1: [verify] with a real 1.21.11 client.
+- Arena run events: the demo sends `{"op":"run","event":"start|progress|finish|fall",...}` in the ghost stream; the mod maps them to fixed data pack functions (`mcrobot_demo:run/*`, integers only) for the boss bar and scoreboard.
 
 ## Python server and training (M1 outline)
 

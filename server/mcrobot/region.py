@@ -10,6 +10,21 @@ import numpy as np
 # Minecraft: x east, y up, z south. MuJoCo: x east, y north, z up. mj = (x, -z, y) * meters_per_block
 # (a proper rotation, no mirroring). Positions are relative to the region origin (min corner).
 
+# World scale: physics metres per Minecraft block. The mod's setting (config/mcrobot.properties `meters_per_block`, default
+# below) is written into every export header; everything downstream reads it from there. 0.5 makes the G1 (1.32 m) 2.6 blocks tall.
+DEFAULT_METERS_PER_BLOCK = 0.5
+
+
+# Sliding friction of slippery full blocks in MuJoCo (default floor: 1.0, the value the walking policy was trained on). Minecraft's ice
+# slipperiness (0.98 against 0.6) has no direct MuJoCo equivalent; 0.25 is a value the frozen G1 policy walks across with margin
+# (it walks 3 m of 0.2 and falls at 0.15, results/m1/arena_course.md). The exporter writes it on the collider geoms.
+DEFAULT_FRICTION = 1.0
+BLOCK_FRICTION = {"packed_ice": 0.25, "ice": 0.25, "blue_ice": 0.25, "frosted_ice": 0.25}
+
+
+def block_friction(name: str) -> float:
+    return BLOCK_FRICTION.get(name.removeprefix("minecraft:"), DEFAULT_FRICTION)
+
 
 class Kind(enum.IntEnum):
     GOAL = 1
@@ -25,9 +40,9 @@ def classify_marker(name: str) -> Kind | None:
         return Kind.GOAL
     if bare in ("lava", "red_wool"):
         return Kind.HAZARD
-    if bare.endswith("_pressure_plate"):
+    if bare.endswith("_pressure_plate") or bare.endswith("_banner"):  # banners: a checkpoint flag with no collision and no redstone look
         return Kind.CHECKPOINT
-    if bare in ("command_block", "chain_command_block", "repeating_command_block"):
+    if bare in ("command_block", "chain_command_block", "repeating_command_block", "beacon"):  # beacon: a clean spawn marker
         return Kind.SPAWN
     return None
 
@@ -53,7 +68,7 @@ class Region:
     palette: list[PaletteEntry]
     grid: np.ndarray  # uint16 (sx, sy, sz) palette indices
     dimension: str = "minecraft:overworld"
-    meters_per_block: float = 1.0
+    meters_per_block: float = DEFAULT_METERS_PER_BLOCK
     meta: dict = field(default_factory=dict)
 
     @classmethod
@@ -65,7 +80,7 @@ class Region:
             palette=pal,
             grid=grid,
             dimension=header.get("dimension", "minecraft:overworld"),
-            meters_per_block=float(header.get("meters_per_block", 1.0)),
+            meters_per_block=float(header.get("meters_per_block", 1.0)),  # headers without the key predate the setting (1 m/block)
             meta={k: header[k] for k in ("mc_version", "label") if k in header},
         )
 
@@ -73,6 +88,12 @@ class Region:
         """1 where the block's collision shape is a full cube, else 0."""
         full = np.array([p.is_full for p in self.palette], dtype=np.uint8)
         return full[self.grid]
+
+    def friction_classes(self) -> tuple[np.ndarray, list[float]]:
+        """(labels, mus): per cell 0 = not a full-cube collider, else 1 + index of the cell's friction in `mus` (sorted, default friction first)."""
+        mus = sorted({block_friction(p.name) for p in self.palette if p.is_full} | {DEFAULT_FRICTION}, key=lambda m: (m != DEFAULT_FRICTION, m))
+        cls = np.array([(1 + mus.index(block_friction(p.name))) if p.is_full else 0 for p in self.palette], dtype=np.uint8)
+        return cls[self.grid], mus
 
     def marker_labels(self) -> np.ndarray:
         """Kind value per cell (0 = no task marker)."""

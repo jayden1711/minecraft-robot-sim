@@ -60,7 +60,7 @@ public final class RegionExporter {
         /*header.addProperty("dimension", world.dimension().location().toString());
         *///?}
         header.addProperty("mc_version", mcVersion);
-        header.addProperty("meters_per_block", 1.0);
+        header.addProperty("meters_per_block", McRobotMod.metersPerBlock());
         return Frames.encodeRegion(GSON.toJson(header), cells);
     }
 

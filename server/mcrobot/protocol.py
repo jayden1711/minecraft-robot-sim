@@ -17,7 +17,7 @@ import numpy as np
 MAGIC = b"MR"
 FRAMING_VERSION = 1
 APP_PROTO_MIN = 1
-APP_PROTO_MAX = 1
+APP_PROTO_MAX = 2
 MAX_FRAME = 64 * 1024 * 1024
 HEADER = struct.Struct(">2sBBI")
 
@@ -38,6 +38,7 @@ class MsgType(enum.IntEnum):
     GHOSTS = 9  # server -> mod, ghost payload
     ERROR = 10  # either, JSON {"code": ..., "message": ...}
     BYE = 11  # either, JSON
+    GHOST_PARTS = 12  # server -> mod (app proto >= 2), JSON: display transformations of ghost parts
 
 
 def encode_frame(msg_type: int, payload: bytes = b"") -> bytes:

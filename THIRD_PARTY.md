@@ -70,6 +70,12 @@ Mojang's server jar is fetched by the Fabric launcher at first start (not hash-p
 | ONNX / onnxruntime | policy export | MIT | [verify] |
 | Diff-drive rover model | M1 | own MJCF, Apache-2.0 | written in this repo |
 
+## Resource pack (generated, not committed)
+
+| Item | Role | License | Status |
+|------|------|---------|--------|
+| MuJoCo Menagerie `unitree_g1` visual meshes, rev `98a70c569c4c1b6da467a20012f766ee1f8dc521` | source of the G1 item models in the server resource pack (`scripts/build_pack.py`) | BSD-3-Clause (the upstream LICENSE text is copied into the pack as `LICENSE-menagerie-g1.txt`) | read from `~/projects/robot-arena-sim/third_party/mujoco_menagerie`; only simplified voxel approximations (cuboid elements) are derived; the logo mesh and all original textures are left out; the zip and its JSON are generated into git-ignored `results/m1/pack/`, never committed |
+
 ## Assets
 
 None committed. Colors used in renders are arbitrary constants chosen in `server/mcrobot/mjcf.py`, not Minecraft textures.

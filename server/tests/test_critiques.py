@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def _export_through_server(tmp_path) -> Path:
     region = demo_maze()
     header = {"origin": list(region.origin), "size": list(region.size),
-              "palette": [{"name": e.name, "shape": e.shape} for e in region.palette]}
+              "palette": [{"name": e.name, "shape": e.shape} for e in region.palette], "meters_per_block": region.meters_per_block}
     srv = Server(port=0, out_dir=tmp_path)
     try:
         ack = srv.handle_region(P.encode_region(header, region.grid))
@@ -38,9 +38,9 @@ def test_C2_minecraft_physics_is_fake__exported_mjcf_runs_identically_without_mi
     a, b = _rollout(xml, seed=3), _rollout(xml, seed=3)
     assert a == b, "same MJCF + same seed must give a bit-identical rollout"
     assert _rollout(xml, seed=4) != a, "different seed must differ (the check is not vacuous)"
-    # and the ball actually interacted with the exported blocks: it rests above the floor (z=1 top) or on a wall
+    # and the ball actually interacted with the exported blocks: it rests above the floor (top at 1 block = 0.5 m at the default scale) or on a wall
     z = float(a.split()[3])
-    assert z > 1.0 and np.isfinite(z)
+    assert z > 0.5 and np.isfinite(z)
 
 
 def test_C2_in_process_and_isolated_rollouts_agree(tmp_path):

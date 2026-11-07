@@ -11,9 +11,9 @@ import java.util.zip.DeflaterOutputStream;
 /** Wire framing, mirror of server/mcrobot/protocol.py. No Minecraft dependencies, so it is unit-testable. */
 public final class Frames {
     public static final int HELLO = 1, HELLO_ACK = 2, PING = 3, PONG = 4, REGION = 5, REGION_ACK = 6,
-            COMMAND = 7, STATUS = 8, GHOSTS = 9, ERROR = 10, BYE = 11;
+            COMMAND = 7, STATUS = 8, GHOSTS = 9, ERROR = 10, BYE = 11, GHOST_PARTS = 12;
     public static final int FRAMING_VERSION = 1;
-    public static final int APP_PROTO_MIN = 1, APP_PROTO_MAX = 1;
+    public static final int APP_PROTO_MIN = 1, APP_PROTO_MAX = 2;
     public static final int MAX_FRAME = 64 * 1024 * 1024;
 
     public record Frame(int type, byte[] payload) {

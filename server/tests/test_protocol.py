@@ -50,9 +50,10 @@ def test_truncated_is_eof():
 
 
 def test_negotiate():
-    assert P.negotiate({"proto": [1, 5]}) == 1
+    assert P.negotiate({"proto": [1, 5]}) == 2
+    assert P.negotiate({"proto": [1, 1]}) == 1
     with pytest.raises(P.ProtocolError):
-        P.negotiate({"proto": [2, 3]})
+        P.negotiate({"proto": [3, 4]})
     with pytest.raises(P.ProtocolError):
         P.negotiate({})
 

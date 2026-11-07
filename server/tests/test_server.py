@@ -55,7 +55,7 @@ def test_handshake_ping_region(server, tmp_path):
 
     region = demo_maze()
     header = {"origin": list(region.origin), "size": list(region.size),
-              "palette": [{"name": e.name, "shape": e.shape} for e in region.palette]}
+              "palette": [{"name": e.name, "shape": e.shape} for e in region.palette], "meters_per_block": region.meters_per_block}
     c.send(MsgType.REGION, raw=P.encode_region(header, region.grid))
     t, p = c.recv()
     ack = P.parse_json(p)
@@ -66,6 +66,16 @@ def test_handshake_ping_region(server, tmp_path):
     c.send(MsgType.BYE)
 
 
+def test_stop_always_clears_ghosts_with_reason(server):
+    c = Client(server.port)
+    hello(c)
+    c.send(MsgType.COMMAND, {"cmd": "stop"})
+    assert c.recv()[0] == MsgType.STATUS
+    t, p = c.recv()
+    assert t == MsgType.GHOST_PARTS
+    assert P.parse_json(p) == {"op": "clear", "reason": "stopped by command"}
+
+
 def test_bad_token_rejected(server):
     c = Client(server.port)
     t, p = hello(c, token="wrong")
@@ -74,7 +84,7 @@ def test_bad_token_rejected(server):
 
 def test_no_common_version(server):
     c = Client(server.port)
-    t, p = hello(c, proto=(2, 3))
+    t, p = hello(c, proto=(3, 4))
     assert t == MsgType.ERROR
 
 

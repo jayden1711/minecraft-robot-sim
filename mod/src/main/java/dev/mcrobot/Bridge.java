@@ -11,7 +11,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-/** Client side of the socket to the Python server. All socket I/O runs off the server thread. */
+/**
+ * Client side of the socket to the Python server. All socket I/O runs off the server thread. After start() a daemon
+ * thread reconnects whenever the trainer is away (it restarts on its own schedule); chat only says "connected" and
+ * "disconnected", once per change, never per retry.
+ */
 public final class Bridge {
     private static final Gson GSON = new Gson();
 
@@ -24,6 +28,10 @@ public final class Bridge {
     private volatile Socket socket;
     private volatile Consumer<String> chat = s -> {};
     private volatile Thread reader;
+    private volatile boolean connected; // what chat last said
+    private volatile boolean closed;
+    private volatile long reconnectMillis = 3000;
+    private String lastFailure = ""; // io thread only; keeps the log to one line per distinct failure
 
     public record Config(String host, int port, String token) {}
 
@@ -34,6 +42,39 @@ public final class Bridge {
     /** Where incoming STATUS/ERROR/ACK text goes (must be thread-safe; McRobotMod hops to the server thread). */
     public void setChat(Consumer<String> chat) {
         this.chat = chat;
+    }
+
+    public boolean isConnected() {
+        Socket s = socket;
+        return s != null && !s.isClosed();
+    }
+
+    /** Starts the background reconnect loop. */
+    public void start(long reconnectMillis) {
+        this.reconnectMillis = reconnectMillis;
+        Thread t = new Thread(() -> {
+            while (!closed) {
+                if (!isConnected()) io.execute(this::tryConnect);
+                try {
+                    Thread.sleep(this.reconnectMillis);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }, "mcrobot-reconnect");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void tryConnect() {
+        try {
+            ensureConnected();
+            lastFailure = "";
+        } catch (IOException e) {
+            String f = String.valueOf(e.getMessage());
+            if (!f.equals(lastFailure)) McRobotMod.LOG.info("trainer not reachable at {}:{}: {} (retrying every {} s)", config.host(), config.port(), f, reconnectMillis / 1000);
+            lastFailure = f;
+        }
     }
 
     public void submit(Runnable r) {
@@ -59,7 +100,7 @@ public final class Bridge {
             }
         } catch (IOException e) {
             closeQuietly();
-            chat.accept("Trainer connection lost: " + e.getMessage());
+            disconnected("send failed: " + e.getMessage());
         }
     }
 
@@ -89,27 +130,44 @@ public final class Bridge {
         t.setDaemon(true);
         reader = t;
         t.start();
-        chat.accept("Connected to trainer: " + ack.text());
+        if (!connected) {
+            connected = true;
+            chat.accept("Connected to trainer: " + ack.text());
+        }
+    }
+
+    /** Reports the loss once (reader, send and explicit paths can all notice it) and clears the ghosts. */
+    private void disconnected(String why) {
+        McRobotMod.ghosts().requestClear("trainer disconnected");
+        if (connected) {
+            connected = false;
+            chat.accept("Trainer disconnected");
+            McRobotMod.LOG.info("trainer disconnected: {}", why);
+        }
     }
 
     private void readLoop(Socket s, DataInputStream in) {
+        String why = "closed";
         try {
             while (!s.isClosed()) {
                 Frames.Frame f = Frames.read(in);
                 switch (f.type()) {
                     case Frames.PONG, Frames.REGION_ACK, Frames.STATUS, Frames.ERROR -> chat.accept(describe(f));
-                    case Frames.GHOSTS -> {} // M1: handled by GhostManager
+                    case Frames.GHOST_PARTS -> McRobotMod.ghosts().offer(f.payload());
+                    case Frames.GHOSTS -> {} // pose-only ghosts are unused; M1 sends GHOST_PARTS
                     default -> chat.accept("Unexpected frame type " + f.type());
                 }
             }
         } catch (IOException e) {
-            if (socket == s) chat.accept("Trainer disconnected");
+            why = String.valueOf(e.getMessage());
         } finally {
-            if (socket == s) socket = null;
+            boolean current = socket == s;
+            if (current) socket = null;
             try {
                 s.close();
             } catch (IOException ignored) {
             }
+            if (current && !closed) disconnected(why);
         }
     }
 
@@ -136,6 +194,7 @@ public final class Bridge {
     }
 
     public void shutdown() {
+        closed = true;
         Socket s = socket;
         if (s != null) {
             try {

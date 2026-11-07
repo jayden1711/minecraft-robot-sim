@@ -72,6 +72,7 @@ generate-structures=false
 view-distance=4
 simulation-distance=4
 spawn-protection=0
+pause-when-empty-seconds=-1
 motd=mcrobot smoke test $MC
 EOF
   else

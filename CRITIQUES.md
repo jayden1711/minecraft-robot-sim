@@ -60,6 +60,17 @@ Tests (M1):
 4. Frame check: in-game screenshot of ghosts at step t and the MuJoCo render of the logged states at step t show the same positions in the same world.
 `test_C5_ghosts_are_logged_training_states` is a placeholder (skipped) until M1 produces training logs.
 
+## C6. "The ghost you watch might not be what the simulator is doing" (display failures, stale ghosts)
+
+Answer: a ghost that is invisible, frozen or left over from an earlier run is a display fault, and the mod now makes it loud instead of silent.
+
+What went wrong once: a first mod build wrote `block_state` in a form that 26.3 decodes to air, the invisible entities were saved in the world, and a later build reused them by UUID, so the demo ran but showed nothing. Controls now in place (mod, tested in `GhostCommandsTest`, `BridgeReconnectTest` and the smoke test `scripts/smoke_server.sh`):
+1. Every streaming session gets its own tag and UUIDs; the first spawn removes all existing ghost entities; a ghost entity that loads outside a session (saved in an unloaded chunk) is discarded on load; stop, trainer loss and server shutdown remove them, so none stay in the world save.
+2. After summoning, the mod reads every part back from the server and reports an ERROR in the log and in chat if a part is missing or reads back as air.
+3. Spawn, stop (with the reason), and a 30-second heartbeat (poses received, age of the last pose) are logged, so a frozen or stalled stream is visible.
+4. The bridge reconnects by itself when the trainer restarts and says only "connected" or "disconnected".
+Limit: the read-back proves the entities exist with a non-air block; that the poses match the simulator is still the C5 provenance test.
+
 ## Honest limits (stated up front)
 
 - Everything is simulation. A policy that works here may not work on a robot; M4 measures that, and until then no real-robot claim is made.

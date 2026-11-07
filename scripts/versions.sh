@@ -5,7 +5,7 @@ ROOT="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
 MC_VERSIONS=(1.20.1 1.21.11 26.3)
 FABRIC_LOADER=0.20.1
 FABRIC_INSTALLER=1.1.2
-MOD_VERSION=0.0.2
+MOD_VERSION=0.0.6
 
 # Java major version each Minecraft version needs (from Mojang's version json javaVersion).
 java_major() {

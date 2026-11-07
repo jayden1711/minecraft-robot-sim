@@ -2,6 +2,7 @@
 
 In game: /function mcrobot_demo:maze   (builds with its corner at the player's feet; region is 9 x 4 x 9)
 Then:    /robot export ~ ~ ~ ~8 ~3 ~8   (run from the same spot)
+Variant: /function mcrobot_demo:maze_wide (11 x 4 x 10, 2-wide corridors, solvable for the G1); export ~ ~ ~ ~10 ~3 ~9
 usage: gen_demo_datapack.py   (writes datapack/mcrobot_demo/)
 """
 
@@ -13,13 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 
 from mcrobot.boxes import merge_boxes
-from mcrobot.synthetic import demo_maze
+from mcrobot.synthetic import demo_maze, demo_maze_wide
 
 STATE = {"minecraft:stone_slab": "minecraft:stone_slab[type=bottom]"}
 
 
-def main() -> None:
-    r = demo_maze()
+def write_function(r, func: str) -> int:
     sx, sy, sz = r.size
     labels = r.grid.astype("int64")
     air = next(i for i, p in enumerate(r.palette) if p.name == "minecraft:air")
@@ -33,10 +33,15 @@ def main() -> None:
     base = ROOT / "datapack" / "mcrobot_demo"
     (base / "data" / "mcrobot_demo" / "function").mkdir(parents=True, exist_ok=True)
     (base / "pack.mcmeta").write_text(
-        json.dumps({"pack": {"description": "minecraft-robot-sim M0 demo maze", "min_format": 94, "max_format": 121}}, indent=2) + "\n"
+        json.dumps({"pack": {"description": "minecraft-robot-sim demo maze and sky arena", "min_format": 94, "max_format": 121}}, indent=2) + "\n"
     )
-    (base / "data" / "mcrobot_demo" / "function" / "maze.mcfunction").write_text("\n".join(lines) + "\n")
-    print(f"{len(lines) - 2} fill commands")
+    (base / "data" / "mcrobot_demo" / "function" / f"{func}.mcfunction").write_text("\n".join(lines) + "\n")
+    return len(lines) - 2
+
+
+def main() -> None:
+    print(f"maze: {write_function(demo_maze(), 'maze')} fill commands")
+    print(f"maze_wide: {write_function(demo_maze_wide(), 'maze_wide')} fill commands")
 
 
 if __name__ == "__main__":

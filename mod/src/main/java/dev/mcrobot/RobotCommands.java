@@ -5,6 +5,7 @@ import static net.minecraft.commands.Commands.literal;
 
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import java.io.IOException;
@@ -15,7 +16,7 @@ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
-/** /robot ping | export <from> <to> | spawn <g1|go2|rover> | train | play | stop. Operators only. */
+/** /robot ping | export <from> <to> | spawn <g1|go2|rover> | demo [arena|arena_v2] | style <models|blocks> | cam <1-8> | train | play | stop. Operators only. */
 final class RobotCommands {
     private RobotCommands() {}
 
@@ -35,6 +36,16 @@ final class RobotCommands {
                             return b.buildFuture();
                         })
                         .executes(c -> command(c, "spawn", StringArgumentType.getString(c, "type")))))
+                .then(literal("demo").executes(c -> command(c, "demo", null))
+                        .then(literal("arena").executes(c -> command(c, "demo", "arena")))
+                        .then(literal("arena_v2").executes(c -> command(c, "demo", "arena_v2"))))
+                .then(literal("style").then(argument("style", StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (String t : new String[] {"models", "blocks"}) b.suggest(t);
+                            return b.buildFuture();
+                        })
+                        .executes(c -> command(c, "style", StringArgumentType.getString(c, "style")))))
+                .then(literal("cam").then(argument("n", IntegerArgumentType.integer(1, 8)).executes(c -> cam(c))))
                 .then(literal("train").executes(c -> command(c, "train", null)))
                 .then(literal("play").executes(c -> command(c, "play", null)))
                 .then(literal("stop").executes(c -> command(c, "stop", null))));
@@ -67,7 +78,17 @@ final class RobotCommands {
         return 1;
     }
 
+    /** Teleports the player to camera spot n of the sky arena (data pack function mcrobot_demo:cam/n; the spots live in the data pack). */
+    private static int cam(CommandContext<CommandSourceStack> c) {
+        int n = IntegerArgumentType.getInteger(c, "n");
+        CommandSourceStack src = c.getSource();
+        src.getServer().getCommands().performPrefixedCommand(src, "function mcrobot_demo:cam/" + n);
+        src.sendSuccess(() -> Component.literal("camera spot " + n + " (1-4: the sky arena, 5-8: arena v2; build it first with /function mcrobot_demo:arena or :arena_v2)"), false);
+        return 1;
+    }
+
     private static int command(CommandContext<CommandSourceStack> c, String cmd, String arg) {
+        if (cmd.equals("stop") && !McRobotMod.bridge().isConnected()) McRobotMod.ghosts().requestClear("stopped by command"); // no trainer to do it
         JsonObject o = new JsonObject();
         o.addProperty("cmd", cmd);
         if (arg != null) o.addProperty("arg", arg);
