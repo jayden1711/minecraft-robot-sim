@@ -70,6 +70,22 @@ Mojang's server jar is fetched by the Fabric launcher at first start (not hash-p
 | ONNX / onnxruntime | policy export | MIT | [verify] |
 | Diff-drive rover model | M1 | own MJCF, Apache-2.0 | written in this repo |
 
+## Training venv (`.venv-train`, git-ignored; GPU navigation training, M1)
+
+Versions and licences read from the installed packages' metadata on 2026-11-06 (offline); the upstream LICENSE texts were not re-read online [verify].
+
+| Item | Version | License (package metadata) | Role |
+|------|---------|---------|------|
+| mjlab | 1.6.0 | Apache-2.0 | pins the MuJoCo / MuJoCo Warp versions below; **not used as a framework**: the navigation env (`server/mcrobot/navenv.py`) drives MuJoCo Warp directly, because the task is a custom exported arena with a frozen policy underneath. mjlab's own G1 model and policy come from the `unitree_rl_mjlab` checkout below |
+| mujoco_warp | 3.11.0 | Apache-2.0 | GPU-parallel MuJoCo physics (the batched env) |
+| mujoco (training venv) | 3.11.0 | Apache-2.0 | model building (`MjSpec`), CPU reference |
+| warp-lang | 1.19.0 | Apache-2.0 (its wheel also bundles third-party licences under `licenses/`) | kernels for MuJoCo Warp |
+| torch | 2.15.0 (CUDA 13) | Apache-2.0 AND BSD-2/3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib (as listed in the wheel) | policy, PPO |
+| onnx | 1.23.2 | Apache-2.0 | reads the frozen walking policy's weights |
+| onnxruntime | 1.31.1 | MIT | CPU reference walker (`g1.G1Walker`) |
+
+Frozen low-level policy and G1 model (unchanged from the demo): `unitree_rl_mjlab`, policy v0 (`deploy/robots/g1/config/policy/velocity/v0/exported/policy.onnx`) and `g1.xml`, Apache-2.0 per the checkout's LICENSE, read from `MCROBOT_G1_ROOT`; its weights are loaded at run time, ported to a torch MLP in memory, and never copied into this repo. The trained navigation policies are our own results (git-ignored under `results/m1/nav/`).
+
 ## Resource pack (generated, not committed)
 
 | Item | Role | License | Status |

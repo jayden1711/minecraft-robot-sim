@@ -95,7 +95,7 @@ def run(course: Course, seconds=14.0, speed=0.45) -> dict:
                     break
         if w.fallen():
             return {"ok": False, "why": "fell", "t": round(i * g1.CTRL_DT, 1), "wall_contact_steps": touches, "x": round(float(p[0]), 2)}
-        if w.pelvis_pos()[0] > course.length - 1.5:
+        if w.pelvis_pos()[0] > 5.5:
             ok_end = True
             break
     return {"ok": ok_end, "why": "reached" if ok_end else "stuck", "x": round(float(w.pelvis_pos()[0]), 2), "wall_contact_steps": touches}
@@ -108,15 +108,15 @@ def main() -> None:
     a = ap.parse_args()
     out = {"body": body_dims(), "corridor": {}, "step": {}, "gap": {}}
     print(json.dumps(out["body"], indent=1), flush=True)
-    widths = [0.5, 0.6, 0.7, 0.8, 1.0] if not a.quick else [0.7, 1.0]
+    widths = [0.5, 0.55, 0.6, 0.7, 0.8, 1.0] if not a.quick else [0.7, 1.0]
     for wd in widths:
         out["corridor"][str(wd)] = run(Course(width=wd))
         print("corridor", wd, out["corridor"][str(wd)], flush=True)
-    steps = [0.03, 0.05, 0.08, 0.10, 0.15, 0.25, 0.5] if not a.quick else [0.05, 0.5]
+    steps = [0.02, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10, 0.15, 0.5] if not a.quick else [0.05, 0.5]
     for h in steps:
         out["step"][str(h)] = run(Course(step=h))
         print("step", h, out["step"][str(h)], flush=True)
-    gaps = [0.1, 0.2, 0.3, 0.5, 1.0] if not a.quick else [0.3, 1.0]
+    gaps = [0.05, 0.1, 0.15, 0.2, 0.3, 1.0] if not a.quick else [0.3, 1.0]
     for gp in gaps:
         out["gap"][str(gp)] = run(Course(gap=gp))
         print("gap", gp, out["gap"][str(gp)], flush=True)

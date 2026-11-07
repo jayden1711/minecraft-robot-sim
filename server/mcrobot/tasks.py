@@ -13,6 +13,7 @@ GOAL_MARGIN = 0.35  # m, horizontal and below: robot base within this of the gol
 HAZARD_MARGIN = 0.10  # m, horizontal margin around red wool / lava boxes
 ABOVE_MARGIN = 0.5  # m, how far above the block top still counts (standing on top of it)
 PLATE_RADIUS = 0.5  # m, horizontal distance to a plate center
+G1_BASE_HEIGHT = 0.78  # m, pelvis above the floor while the G1 stands (measured with the frozen walking policy; the reset height is 0.80)
 
 
 @dataclass
@@ -40,17 +41,19 @@ class TaskSpec:
         ok_z = (p[2] >= lo[:, 2] - margin_below) & (p[2] <= hi[:, 2] + margin_above)
         return ok_xy & ok_z
 
-    def reached_goal(self, p: np.ndarray) -> bool:
-        return bool(len(self.goals) and self._inside(p, self.goals, GOAL_MARGIN, GOAL_MARGIN, ABOVE_MARGIN).any())
+    def reached_goal(self, p: np.ndarray, base_height: float = 0.0) -> bool:
+        """`p` is the tracked point (the pelvis for the G1). `base_height` is how far that point rides above the surface the robot
+        stands on (G1_BASE_HEIGHT; 0 for a point or a rover), so standing on the block counts however tall the robot is."""
+        return bool(len(self.goals) and self._inside(p, self.goals, GOAL_MARGIN, GOAL_MARGIN, ABOVE_MARGIN + base_height).any())
 
     def in_hazard(self, p: np.ndarray) -> bool:
         return bool(len(self.hazards) and self._inside(p, self.hazards, HAZARD_MARGIN, 0.0, ABOVE_MARGIN).any())
 
-    def checkpoint_hit(self, p: np.ndarray) -> np.ndarray:
-        """bool (n_checkpoints,): which plates the robot is currently on."""
+    def checkpoint_hit(self, p: np.ndarray, base_height: float = 0.0) -> np.ndarray:
+        """bool (n_checkpoints,): which plates the robot is currently on (`base_height` as in reached_goal)."""
         if not len(self.checkpoints):
             return np.zeros(0, bool)
         c = (self.checkpoints[:, 0] + self.checkpoints[:, 1]) / 2
         near_xy = np.linalg.norm(p[:2] - c[:, :2], axis=1) <= PLATE_RADIUS
-        z_ok = (p[2] >= self.checkpoints[:, 0, 2] - 0.1) & (p[2] <= self.checkpoints[:, 1, 2] + ABOVE_MARGIN)
+        z_ok = (p[2] >= self.checkpoints[:, 0, 2] - 0.1) & (p[2] <= self.checkpoints[:, 1, 2] + ABOVE_MARGIN + base_height)
         return near_xy & z_ok

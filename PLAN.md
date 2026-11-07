@@ -193,12 +193,16 @@ Goal: the player watches the policy improve. Ghosts are not an animation: every 
   definitions under `assets/<ns>/items/` exist on both). ViaBackwards passes the resource-pack push through (the client downloads from the URL) and should map the `item_model` component 1:1: [verify] with a real 1.21.11 client.
 - Arena run events: the demo sends `{"op":"run","event":"start|progress|finish|fall",...}` in the ghost stream; the mod maps them to fixed data pack functions (`mcrobot_demo:run/*`, integers only) for the boss bar and scoreboard.
 
-## Python server and training (M1 outline)
+## Python server and training (M1, as built: the G1 on the sky arena)
 
-`/robot train` re-exports the saved region (edits are picked up), builds the MJCF, makes the env (rover first: diff-drive, ray/lidar-free observation of
-heading, relative goal vector, and a coarse local occupancy patch), trains with PPO under `gpu-run --preemptible` (checkpoint on SIGUSR1/yield-file, resume on start),
-streams ghosts and STATUS lines. `/robot play` runs the latest policy in one env, shown as one ghost; `/robot stop` checkpoints and halts.
-Commands beyond the owner's list that M1 adds: `/robot region <from> <to>` (saves the arena). The M0 mod implements `ping`, `export`, and forwards `spawn/train/play/stop`.
+M1 changed from the rover in a maze to the **Unitree G1 humanoid on the sky arena** (owner decisions 2026-11-06). Two levels:
+
+- **Low level, frozen:** the `unitree_rl_mjlab` velocity policy v0 (Apache-2.0; flat-ground trained, 98 inputs, three ELU layers), used unchanged: (vx, vy, yaw rate) in, 29 joint targets out at 50 Hz, the same PD gains and 4 x 5 ms physics substeps as the policy's own deployment config. `navenv.LowLevel` ports it to a torch MLP so thousands of copies run on the GPU; `g1.G1Walker` (CPU MuJoCo + onnxruntime) is the reference the batched version is tested against.
+- **High level, learned:** a PPO policy (`navppo.py`) that outputs a velocity command every 0.1 s (smoothed, inside the walking policy's command range). Observation (45 numbers): a compass (direction to the next point on the shortest walkable path to the gold block, in the body frame, and the path distance), 16 wall rays and 16 void/lava rays (the only view of the world, sampled from the exported boxes), base velocity, gravity, the previous command, and the fraction of plates collected. Rewards: progress along the shortest path (dense), +1 per pressure plate (once), +10 and end at the gold pad, -10 and end for lava, leaving the course, or falling, a small time and command-change cost. The goal rule is relative to the robot's base height (`tasks.G1_BASE_HEIGHT`): the old absolute margin never fired for a standing G1.
+- **Physics:** MuJoCo Warp (`mujoco_warp`, the backend of mjlab) directly, one world per env, the arena's collider boxes plus the G1; mjlab itself is only the version pin (THIRD_PARTY.md). Episodes start on the command block (a share of them, always for the 20 ghost envs) or on random free cells along the course, so every section is practised; evaluation always starts on the command block.
+- **Under `gpu-run --preemptible`:** `scripts/train_nav.py` checkpoints atomically, saves on SIGUSR1/yield file/SIGTERM and exits, and resumes from `latest.pt`; only latest, best and final are kept (NUC rule).
+- **Ghost swarm:** the first 20 envs are streamed to the mod as display-entity ghosts at 4 Hz (latest-wins; every pose sent is logged). The trainer serves the frames on `<out>/ghosts.sock`; the Python server attaches there (`jobs.Attach`, reconnects when the trainer yields and resumes, chat only on state changes). `/robot train` starts the trainer if none runs (or attaches to a running one), `/robot play` runs the best policy for one G1 on the CPU with the arena timer, `/robot stop` ends it (for a trainer started outside the game, only the display).
+- `scripts/eval_nav.py` evaluates from the command block over seeds; `--scripted` is a compass-following baseline without learning.
 
 ## Export (M3)
 
