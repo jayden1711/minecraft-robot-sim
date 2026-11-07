@@ -140,9 +140,10 @@ class Attach:
         self._thread.join(2)
 
 
-def trainer_pid(out: Path = NAV_OUT) -> int | None:
-    """Pid of a live train_nav.py for this run directory (written by the script), else None."""
-    p = out / "trainer.pid"
+def trainer_pid(out: Path | None = None) -> int | None:
+    """Pid of a live train_nav.py for this run directory (written by the script), else None.
+    NAV_OUT is read at call time, not bound as a default, so a patched NAV_OUT (tests) is honoured."""
+    p = (NAV_OUT if out is None else out) / "trainer.pid"
     try:
         pid = int(p.read_text())
         return pid if "train_nav" in Path(f"/proc/{pid}/cmdline").read_text() else None

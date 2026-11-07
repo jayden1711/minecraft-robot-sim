@@ -10,6 +10,10 @@ Status column: **designed** (test written, may be partly runnable now), **runs**
 | C3 | "Blocks aren't real terrain." | designed |
 | C4 | "Toy tasks." | designed |
 | C5 | "It's just a scripted animation." | provenance test runs (M1); held-out replay in plain MuJoCo pending (M3) |
+| C10 | "It was just retrained." | designed (M2) |
+| C11 | "Stairs are a trivial terrain curriculum." | designed (M2) |
+| C12 | "It forgot how to walk on flat ground." | designed (M2) |
+| C13 | "The navigator never saw the stairs as walkable." | designed (M2) |
 
 ## C1. "It's just a game."
 
@@ -88,6 +92,44 @@ Limits: the pushes are fixed (same size, place and timing every lap), so the pol
 What went wrong once: the first v2 training chunk (light lane) printed "nefc overflow - please increase njmax" over a thousand times. MuJoCo Warp had per-world constraint and contact buffers that were too small for the G1 pressed against block geometry, and when a buffer is full the solver drops constraints and carries on, so the world keeps simulating with contacts missing. That chunk was moved to `results/_trash/nav_v2_overflow/` and not used. Controls now in place: `NJMAX` / `NCONMAX` in `navenv.py` are sized from measured peaks on arena v2 (`scripts/probe_nav_overflow.py`: a scripted lap through every section plus a random-command stress phase) with headroom; `NavEnv.step` checks the solver's own per-world overflow flag after every nav step and raises `PhysicsOverflow` instead of warning; `test_nav_overflow.py` checks that a short walk through every section of arena v2 overflows nothing and that a too-small buffer raises.
 Affected earlier results: none were cited. The v1 run never trained (its log is only a queue message). The 2-iteration CPU smoke run on the v1 arena (8 envs) did not save its output, so whether it overflowed is unknown: [rerun pending] if it is ever cited; no result from it is used.
 Limit: the check proves no buffer overflowed in the runs that are checked, not that the buffers suffice for every possible pose; a fall into a corner could in principle exceed the measured peaks, which is why an overflow stops the run rather than being counted.
+
+## C10. "It was just retrained." (M2: is it still the open base policy, or a new policy that happens to climb?)
+
+The objection has two halves: (a) the stair policy is a different policy from scratch and "fine-tuned" is a label, so the M1 statement "frozen open walking policy" no longer describes the nav stack; (b) the gain comes from more training compute, not from anything about the base or the curriculum.
+Answer (planned): the fine-tuned policy starts as the base (an identity test) and stays measurably close to it, and a from-scratch run with the same recipe and budget is the control.
+Tests (`docs/m2-plan.md` sections 3, 8.3, 11):
+1. Identity at iteration 0: the imported actor equals the base ONNX within 1e-5 on 10 000 recorded observations (`test_m2_import.py`).
+2. Provenance: the run log records, at every evaluation, the relative weight distance from the base per layer and the behavioural distance (action difference on recorded flat observations: mean and 95th percentile). Only latest, best and final checkpoints are kept (NUC rule), so the trajectory lives in the log.
+3. Control: the same recipe (curriculum, rewards, budget) from a randomly initialised actor. Reported next to the fine-tuned run: stairs success, the regression gate and env-steps to reach each level. If the scratch run matches both, the claim shrinks to "the base is a convenient start"; if it does not, the base initialisation is what mattered. Either way the table is published, not one row of it.
+4. Wording after M2: the nav stack uses the fine-tuned policy as its frozen low level; M1 results used the base and are labelled as such.
+Limit: one training seed unless the budget allows more; the CIs then cover evaluation noise, not run-to-run variance.
+
+## C11. "Stairs are a trivial terrain curriculum."
+
+The objection: pyramid stairs are a standard terrain in every locomotion framework, so climbing them is not a result; or the policy only learned the generator's stairs and would fail on anything else.
+Answer (planned): the claim is narrower and measured: a riser of 0.25 m, up and down, on stairs built from exported Minecraft boxes the generator never produced as a whole, with the failure frontier shown.
+Tests (`docs/m2-plan.md` section 8.2):
+1. Held-out geometry: treads 0.35, 0.65 and 0.8 m (the training treads are 0.25, 0.5, 0.75, 1.0 plus jitter), a riser jitter of 0.02 m, a flight with mixed risers; success with Wilson intervals.
+2. Transfer to the real arena: the scripted lap and the nav evaluation run on the exporter's merged boxes (not the training generator's boxes); the merged-vs-per-block comparison bounds seam effects.
+3. Difficulty is shown, not asserted: success against riser height (0.0625 to 0.30 m) and tread (0.25, 0.5, 1.0 m), up and down, the frontier included; plus a baseline fine-tune on the framework's own stairs preset (risers up to 0.10 m) evaluated at 0.25 m. The baseline is expected to fail at 0.25 m; that is a hypothesis until it is run.
+4. What "blind" means is stated: plan A uses no terrain input; if plan B (height scan) is needed, the result is reported as a perception-based policy with its costs, not as the same blind policy.
+
+## C12. "It forgot how to walk on flat ground."
+
+The objection: fine-tuning on a hard task degrades what the base did well (catastrophic forgetting), so the arena's other sections silently get worse.
+Answer (planned): a regression gate with margins fixed before training, on paired seeds, covering the original task, every other arena section and the limit probes; plus a control that shows the gate can fail.
+Tests (`docs/m2-plan.md` sections 6, 8.3):
+1. R1, the original flat velocity task at the deployed command ranges: survival and tracking error against the base on identical seeds; non-inferiority margins 2 points (survival) and 10 % (tracking error).
+2. R2, every non-stairs section of arena v2 plus the whole lap with the ramp, scripted pursuit with perturbations: paired success difference within 3 points, lateral deviation within 1.25x.
+3. R3, the envelope: ice friction at failure, push force at failure, 1-block beam, micro-steps: not worse than one grid step.
+4. Positive control for the test itself: a short fine-tune on stairs only with no anchor and no flat tiles must FAIL R1 or R2. A gate that cannot fail proves nothing.
+5. Checkpoint selection uses the gate: `best` is the best stairs score among checkpoints that pass it.
+Limit: the flat tests are in simulation with the randomisation of the original task; they bound forgetting in that distribution, not on a robot.
+
+## C13. "The navigator never saw the stairs as walkable." (found while planning M2)
+
+What would go wrong: the navigation map marks a cell as a wall when its top is more than 0.25 m above the global floor (`navtask.WALL_ABOVE`), so with real 0.25 m steps the second step and the 1.5 m platform are walls: the compass route stops at the stairs and the wall rays show them as obstacles, however well the low level climbs.
+Planned control: walkability from the step between neighbouring cells (`docs/m2-plan.md` section 10.3), tested by: the START-to-FINISH route of arena v2 with real stairs is connected; the SLALOM pillars and DOORWAY walls stay walls; the ramp mode produces a byte-identical map and route to today's; the per-section failure statistics of the nav evaluation show STAIRS as its own row.
 
 ## Honest limits (stated up front)
 
